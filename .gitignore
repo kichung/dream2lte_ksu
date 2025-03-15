@@ -1,0 +1,10 @@
+.*
+!.gitignore
+
+build/
+scripts/
+out/
+ramdisk/
+sound/
+KernelSU/
+usr/
