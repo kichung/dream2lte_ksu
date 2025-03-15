@@ -5,16 +5,16 @@ export MODEL=dream2lte
 export ANDROID_MAJOR_VERSION=p
 export VARIANT=eur
 export ARCH=arm64
-export BUILD_CROSS_COMPILE=./toolchain/gcc-cfp/gcc-cfp-jopp-only/aarch64-linux-android-4.9/bin/aarch64-linux-android-
+export BUILD_CROSS_COMPILE=/opt/kernel/toolchain/gcc-cfp/gcc-cfp-jopp-only/aarch64-linux-android-4.9/bin/aarch64-linux-android-
 export BUILD_JOB_NUMBER=`grep processor /proc/cpuinfo|wc -l`
 
 RDIR=$(pwd)
-OUTDIR=$RDIR/arch/$ARCH/boot
+OUTDIR=$RDIR/build/out
+DTBOUTDIR=$OUTDIR/arch/$ARCH/boot
 DTSDIR=$RDIR/arch/$ARCH/boot/dts/exynos
-DTBDIR=$OUTDIR/dtb
-DTCTOOL=$RDIR/scripts/dtc/dtc
+DTBDIR=$DTBOUTDIR/dtb
+DTCTOOL=$OUTDIR/scripts/dtc/dtc
 INCDIR=$RDIR/include
-OUTDIR=$RDIR/out
 
 PAGE_SIZE=2048
 DTB_PADDING=0
@@ -50,14 +50,14 @@ esac
 
 FUNC_CLEAN_DTB()
 {
-	if ! [ -d $RDIR/arch/$ARCH/boot/dts ] ; then
-		echo "no directory : "$RDIR/arch/$ARCH/boot/dts""
+	if ! [ -d $OUTDIR/arch/$ARCH/boot/dts ] ; then
+		echo "no directory : "$OUTDIR/arch/$ARCH/boot/dts""
 	else
-		echo "rm files in : "$RDIR/arch/$ARCH/boot/dts/*.dtb""
-		rm $RDIR/arch/$ARCH/boot/dts/*.dtb
-		rm $RDIR/arch/$ARCH/boot/dtb/*.dtb
-		rm $RDIR/arch/$ARCH/boot/boot.img-dtb
-		rm $RDIR/arch/$ARCH/boot/boot.img-zImage
+		echo "rm files in : "$OUTDIR/arch/$ARCH/boot/dts/*.dtb""
+		rm $OUTDIR/arch/$ARCH/boot/dts/*.dtb
+		rm $OUTDIR/arch/$ARCH/boot/dtb/*.dtb
+		rm $OUTDIR/arch/$ARCH/boot/boot.img-dtb
+		rm $OUTDIR/arch/$ARCH/boot/boot.img-zImage
 	fi
 }
 
@@ -102,7 +102,7 @@ FUNC_BUILD_DTIMAGE_TARGET()
 		;;
 	esac
 
-	mkdir -p $OUTDIR $DTBDIR
+	mkdir -p $DTBOUTDIR $DTBDIR
 
 	cd $DTBDIR || {
 		echo "Unable to cd to $DTBDIR!"
@@ -121,7 +121,7 @@ FUNC_BUILD_DTIMAGE_TARGET()
 	done
 
 	echo "Generating dtb.img..."
-	$RDIR/scripts/dtbTool/dtbTool -o "$OUTDIR/dtb.img" -d "$DTBDIR/" -s $PAGE_SIZE
+	$RDIR/scripts/dtbTool/dtbTool -o "$DTBOUTDIR/dtb.img" -d "$DTBDIR/" -s $PAGE_SIZE
 
 	echo "Done."
 }
@@ -135,23 +135,27 @@ FUNC_BUILD_KERNEL()
         echo ""
         echo "build common config="$KERNEL_DEFCONFIG ""
         echo "build model config="$MODEL ""
+        echo "$1 $2"
+
 
 	FUNC_CLEAN_DTB
+
     if ! [ -z "$1" ]; then
         echo "Clean previous build"
-    	make -j$BUILD_JOB_NUMBER ARCH=$ARCH \
+    	make -C "$RDIR" O="$OUTDIR" -j$BUILD_JOB_NUMBER ARCH=$ARCH \
 	    		CROSS_COMPILE=$BUILD_CROSS_COMPILE $1 || exit -1
     fi
 
-	make -j$BUILD_JOB_NUMBER ARCH=$ARCH \
+	make -C "$RDIR" O="$OUTDIR" -j$BUILD_JOB_NUMBER ARCH=$ARCH \
 			CROSS_COMPILE=$BUILD_CROSS_COMPILE \
 			$KERNEL_DEFCONFIG ksu.config || exit -1
 
-	make -j$BUILD_JOB_NUMBER ARCH=$ARCH \
+    if [ $# -gt 1 ]; then
+    	make -C "$RDIR" O="$OUTDIR" -j$BUILD_JOB_NUMBER ARCH=$ARCH \
 			CROSS_COMPILE=$BUILD_CROSS_COMPILE menuconfig || exit -1
+    fi
 
-
-	make -j$BUILD_JOB_NUMBER ARCH=$ARCH \
+	make -C "$RDIR" O="$OUTDIR" -j$BUILD_JOB_NUMBER ARCH=$ARCH \
 			CROSS_COMPILE=$BUILD_CROSS_COMPILE || exit -1
 
 	FUNC_BUILD_DTIMAGE_TARGET
@@ -165,8 +169,14 @@ FUNC_BUILD_KERNEL()
 
 FUNC_BUILD_RAMDISK()
 {
-	mv $RDIR/arch/$ARCH/boot/Image $RDIR/arch/$ARCH/boot/boot.img-zImage
-	mv $RDIR/arch/$ARCH/boot/dtb.img $RDIR/arch/$ARCH/boot/boot.img-dtb
+	mv $OUTDIR/arch/$ARCH/boot/Image $RDIR/arch/$ARCH/boot/boot.img-zImage
+	mv $OUTDIR/arch/$ARCH/boot/dtb.img $RDIR/arch/$ARCH/boot/boot.img-dtb
+
+        echo ""
+        echo "=============================================="
+        echo "START : FUNC_BUILD_RAMDISK"
+        echo "=============================================="
+        echo ""
 
 	case $MODEL in
 	dreamlte)
@@ -189,13 +199,13 @@ FUNC_BUILD_RAMDISK()
 	dream2lte)
 		case $VARIANT in
 		can|duos|eur|xx)
-			rm -f $RDIR/ramdisk/SM-G955F/split_img/boot.img-zImage
-			rm -f $RDIR/ramdisk/SM-G955F/split_img/boot.img-dtb
-			mv -f $RDIR/arch/$ARCH/boot/boot.img-zImage $RDIR/ramdisk/SM-G955F/split_img/boot.img-zImage
-			mv -f $RDIR/arch/$ARCH/boot/boot.img-dtb $RDIR/ramdisk/SM-G955F/split_img/boot.img-dtb
+			sudo rm -f $RDIR/ramdisk/SM-G955F/split_img/boot.img-zImage
+			sudo rm -f $RDIR/ramdisk/SM-G955F/split_img/boot.img-dtb
+			sudo mv -f $RDIR/arch/$ARCH/boot/boot.img-zImage $RDIR/ramdisk/SM-G955F/split_img/boot.img-zImage
+			sudo mv -f $RDIR/arch/$ARCH/boot/boot.img-dtb $RDIR/ramdisk/SM-G955F/split_img/boot.img-dtb
 			cd $RDIR/ramdisk/SM-G955F
-			./repackimg.sh
-			echo SEANDROIDENFORCE >> image-new.img
+			sudo ./repackimg.sh
+			sudo echo SEANDROIDENFORCE >> image-new.img
 			;;
 		*)
 			echo "Unknown variant: $VARIANT"
@@ -213,7 +223,7 @@ FUNC_BUILD_RAMDISK()
 FUNC_BUILD_ZIP()
 {
 	cd $RDIR/build
-	rm $MODEL-$VARIANT.img
+	sudo rm *.img
 	case $MODEL in
 	dreamlte)
 		case $VARIANT in
@@ -229,7 +239,7 @@ FUNC_BUILD_ZIP()
 	dream2lte)
 		case $VARIANT in
 		can|duos|eur|xx)
-			mv -f $RDIR/ramdisk/SM-G955F/image-new.img $RDIR/build/$MODEL-$VARIANT.img
+			mv -f $RDIR/ramdisk/SM-G955F/image-new.img $RDIR/build/$MODEL-$VARIANT-$(printf '%(%Y%m%d_%H%M%S)T\n' -1).img
 			;;
 		*)
 			echo "Unknown variant: $VARIANT"
@@ -248,8 +258,7 @@ FUNC_BUILD_ZIP()
 rm -rf ./build.log
 #(
 	START_TIME=`date +%s`
-
-	FUNC_BUILD_KERNEL
+	FUNC_BUILD_KERNEL $1
 	FUNC_BUILD_RAMDISK
 	FUNC_BUILD_ZIP
 
